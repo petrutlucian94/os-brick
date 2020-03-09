@@ -20,31 +20,13 @@ from os_brick.initiator.connectors import rbd
 from os_brick.initiator import linuxrbd
 from os_brick.privileged import rootwrap as priv_rootwrap
 from os_brick.tests.initiator import test_connector
+from os_brick.tests.initiator.connectors import test_base_rbd
 from os_brick import utils
 
 
 @ddt.ddt
-class RBDConnectorTestCase(test_connector.ConnectorTestCase):
-
-    def setUp(self):
-        super(RBDConnectorTestCase, self).setUp()
-
-        self.user = 'fake_user'
-        self.pool = 'fake_pool'
-        self.volume = 'fake_volume'
-        self.clustername = 'fake_ceph'
-        self.hosts = ['192.168.10.2']
-        self.ports = ['6789']
-        self.keyring = "[client.cinder]\n  key = test\n"
-
-        self.connection_properties = {
-            'auth_username': self.user,
-            'name': '%s/%s' % (self.pool, self.volume),
-            'cluster_name': self.clustername,
-            'hosts': self.hosts,
-            'ports': self.ports,
-            'keyring': self.keyring,
-        }
+class RBDConnectorTestCase(test_base_rbd.RBDConnectorTestMixin,
+                           test_connector.ConnectorTestCase):
 
     def test_get_search_path(self):
         rbd_connector = rbd.RBDConnector(None)
@@ -139,24 +121,6 @@ class RBDConnectorTestCase(test_connector.ConnectorTestCase):
             self.assertRaises(exception.BrickException,
                               conn._check_or_get_keyring_contents, keyring,
                               'cluster', 'user')
-
-    @ddt.data((['192.168.1.1', '192.168.1.2'],
-               ['192.168.1.1', '192.168.1.2']),
-              (['3ffe:1900:4545:3:200:f8ff:fe21:67cf',
-                'fe80:0:0:0:200:f8ff:fe21:67cf'],
-               ['[3ffe:1900:4545:3:200:f8ff:fe21:67cf]',
-                '[fe80:0:0:0:200:f8ff:fe21:67cf]']),
-              (['foobar', 'fizzbuzz'], ['foobar', 'fizzbuzz']),
-              (['192.168.1.1',
-                '3ffe:1900:4545:3:200:f8ff:fe21:67cf',
-                'hello, world!'],
-               ['192.168.1.1',
-                '[3ffe:1900:4545:3:200:f8ff:fe21:67cf]',
-                'hello, world!']))
-    @ddt.unpack
-    def test_sanitize_mon_host(self, hosts_in, hosts_out):
-        conn = rbd.RBDConnector(None)
-        self.assertEqual(hosts_out, conn._sanitize_mon_hosts(hosts_in))
 
     @mock.patch('os_brick.initiator.connectors.rbd.tempfile.mkstemp')
     def test_create_ceph_conf(self, mock_mkstemp):
@@ -488,20 +452,6 @@ class RBDConnectorTestCase(test_connector.ConnectorTestCase):
                                           mock_config.return_value)
         mock_delete.assert_called_once_with(mock_config.return_value)
         mock_open.assert_not_called()
-
-    def test__get_rbd_args(self):
-        res = rbd.RBDConnector._get_rbd_args(self.connection_properties, None)
-        expected = ['--id', self.user,
-                    '--mon_host', self.hosts[0] + ':' + self.ports[0]]
-        self.assertEqual(expected, res)
-
-    def test__get_rbd_args_with_conf(self):
-        res = rbd.RBDConnector._get_rbd_args(self.connection_properties,
-                                             mock.sentinel.conf_path)
-        expected = ['--id', self.user,
-                    '--mon_host', self.hosts[0] + ':' + self.ports[0],
-                    '--conf', mock.sentinel.conf_path]
-        self.assertEqual(expected, res)
 
     @mock.patch.object(rbd.RBDConnector, '_get_rbd_args')
     @mock.patch.object(rbd.RBDConnector, '_execute')
